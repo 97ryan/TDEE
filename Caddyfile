@@ -1,0 +1,4 @@
+:8443
+root * /home/ryan/Downloads/tdee_tracker_pwa_v8
+file_server
+tls /home/ryan/Downloads/tdee_tracker_pwa_v8/cert.pem /home/ryan/Downloads/tdee_tracker_pwa_v8/cert-key.pem
