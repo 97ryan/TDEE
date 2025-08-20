@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <title>TDEE Tracker (Offline)</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <h1>TDEE Tracker</h1>
+  <p class="sub">Offline • Local-Only • Metric</p>
+</header>
+
+<main>
+  <!-- Summary card -->
+  <section class="card highlight" id="summaryCard">
+    <h2>Current TDEE</h2>
+    <div class="tdee-hero">
+      <span id="currentTDEE">—</span>
+      <span class="unit">kcal/day</span>
+    </div>
+    <p class="muted small" id="tdeeNote">Based on last 7 days</p>
+<div class="mini-metrics">
+  <div class="mini-card">
+    <div class="mini-title">Need to eat</div>
+    <div class="mini-value"><span id="needToEat">—</span> <span class="unit">kcal/day</span></div>
+  </div>
+  <div class="mini-card">
+    <div class="mini-title">Calorie change needed</div>
+    <div class="mini-value"><span id="calChange">—</span> <span class="unit">kcal/day</span></div>
+  </div>
+</div>
+  </section>
+
+  <section class="card">
+    <h2>Daily Log</h2>
+    <form id="entryForm">
+      <div class="grid">
+        <label>Date
+          <input type="date" id="date" required>
+        </label>
+        <label>Weight (kg)
+          <input type="number" id="weight" step="0.01" min="0" placeholder="e.g. 76.4" required>
+        </label>
+        <label>Calories (kcal)
+          <input type="number" id="calories" step="1" min="0" placeholder="e.g. 2350" required>
+        </label>
+      </div>
+      <button type="submit">Save</button>
+    </form>
+
+    <div id="history"></div>
+  </section>
+
+  <section class="card">
+    <h2>Settings</h2>
+    <div class="grid">
+      <label>Goal (kg/week) <span class="hint">(negative to lose, positive to gain)</span>
+        <input type="number" id="goal" step="0.01" value="-0.50">
+      </label>
+      <label>Window (days) <span class="hint">(rolling calc)</span>
+        <input type="number" id="windowDays" step="1" min="1" value="7">
+      </label>
+    </div>
+    <div class="grid">
+      <button id="saveSettings">Save Settings</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Charts</h2>
+    <div class="chart-block">
+      <h3>Weight (kg)</h3>
+      <svg id="weightChart" class="chart"></svg>
+    </div>
+    <div class="chart-block">
+      <h3>Calories (kcal)</h3>
+      <svg id="calChart" class="chart"></svg>
+    </div>
+    <div class="chart-block">
+      <h3>TDEE (kcal/day) vs Target</h3>
+      <svg id="tdeeChart" class="chart"></svg>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Export / Import</h2>
+    <div class="grid file-grid">
+      <button id="exportJSON">Export JSON</button>
+      <button id="exportCSV">Export CSV</button>
+
+      <button id="btnImportJSON" type="button">Import JSON</button>
+      <input type="file" id="importFile" class="hidden-file" accept=".json,application/json">
+
+      <button id="btnImportCSV" type="button">Import CSV</button>
+      <input type="file" id="importCSV" class="hidden-file" accept=".csv,text/csv">
+    </div>
+    <pre id="exportOutput" class="export"></pre>
+  </section>
+
+  <section class="card danger-card">
+    <h2>Danger Zone</h2>
+    <p class="muted small">This will permanently delete all local entries and settings on this device.</p>
+    <button id="clearAllData" class="danger large">Clear All Data</button>
+  </section>
+</main>
+
+<footer>
+  <p>All data stored locally in your browser (localStorage). Add to Home Screen for an app-like experience.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
