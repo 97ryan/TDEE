@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write # only used on tag builds, to attach the APK to the GitHub Release
+      contents: write # to publish the APK to the GitHub Release
     steps:
       - uses: actions/checkout@v4
 
@@ -29,8 +29,15 @@ jobs:
       - name: Test and build release APK
         run: |
           ./gradlew --no-daemon testDebugUnitTest assembleRelease
+          # Release tag: the pushed tag, otherwise v<versionName> from app/build.gradle.kts.
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            TAG="v$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)"
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk dist/TDEE-${GITHUB_REF_NAME//\//-}.apk
+          cp app/build/outputs/apk/release/app-release.apk "dist/TDEE-$TAG.apk"
 
       # Artifacts count against the account's Actions storage quota; never fail the build on it.
       - uses: actions/upload-artifact@v4
@@ -40,11 +47,15 @@ jobs:
           path: dist/*.apk
           retention-days: 7
 
-      # Tag v1.2.3 → GitHub Release with the APK attached (not subject to the artifact quota).
+      # Every push publishes the APK to the GitHub Release for the current version (not subject to
+      # the artifact quota). Bump versionName to start a new release; otherwise the APK is replaced.
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/*.apk --title "TDEE $GITHUB_REF_NAME" --generate-notes \
-            || gh release upload "$GITHUB_REF_NAME" dist/*.apk --clobber
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.apk --clobber
+          else
+            gh release create "$TAG" dist/*.apk --target "$GITHUB_SHA" --title "TDEE $TAG" --generate-notes
+          fi

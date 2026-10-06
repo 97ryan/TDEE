@@ -60,8 +60,9 @@ Requires JDK 17 and the Android SDK (API 35).
 ./gradlew testDebugUnitTest assembleRelease
 ```
 
-Every push is built and unit-tested by GitHub Actions (`.github/workflows/build.yml`). Pushing a
-tag like `v1.0.0` also creates a GitHub Release with the ready-to-install APK attached.
+Every push is built and unit-tested by GitHub Actions (`.github/workflows/build.yml`), and the APK
+is published to the GitHub Release for the current `versionName` (e.g. `v1.0.0`). Bump `versionName`
+(and `versionCode`) in `app/build.gradle.kts` to start a new release.
 
 Release builds are signed with `keystore/dev.jks` (password `tdee-dev`) so that every build installs
 over the previous one. To sign with your own key, set `TDEE_KEYSTORE`, `TDEE_KEYSTORE_PASSWORD`,
