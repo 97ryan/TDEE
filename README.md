@@ -4,7 +4,7 @@ A minimalist, Material You TDEE tracker for Android. Log your weight and calorie
 works out your real energy expenditure (TDEE) from your own data, then tells you how much to eat to
 hit your weekly weight goal.
 
-**Download:** [`apk/TDEE.apk`](apk/TDEE.apk) is rebuilt by CI on every push.
+**Download:** grab the APK from the [latest release](https://github.com/97ryan/TDEE/releases/latest).
 
 ## Features
 
@@ -60,6 +60,9 @@ Requires JDK 17 and the Android SDK (API 35).
 ./gradlew testDebugUnitTest assembleRelease
 ```
 
+Every push is built and unit-tested by GitHub Actions (`.github/workflows/build.yml`). Pushing a
+tag like `v1.0.0` also creates a GitHub Release with the ready-to-install APK attached.
+
 Release builds are signed with `keystore/dev.jks` (password `tdee-dev`) so that every build installs
 over the previous one. To sign with your own key, set `TDEE_KEYSTORE`, `TDEE_KEYSTORE_PASSWORD`,
 `TDEE_KEY_ALIAS` and `TDEE_KEY_PASSWORD`.
@@ -68,5 +71,5 @@ over the previous one. To sign with your own key, set `TDEE_KEYSTORE`, `TDEE_KEY
 
 Only open-source AndroidX/Jetpack dependencies from Google Maven and Maven Central. No proprietary
 libraries, trackers or network access, and the dependency-info blob is disabled. Before submitting:
-pick a final `applicationId`, add a licence, add `fastlane/metadata`, and exclude `apk/` and
-`keystore/` (F-Droid builds and signs from source).
+pick a final `applicationId`, add a licence, add `fastlane/metadata`, and exclude `keystore/`
+(F-Droid builds and signs from source).
