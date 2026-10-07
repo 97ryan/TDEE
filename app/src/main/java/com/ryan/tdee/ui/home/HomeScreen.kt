@@ -276,15 +276,9 @@ private fun LogCard(
     var weight by rememberSaveable(*keys) {
         mutableStateOf(entry?.weightKg?.let { wu.format(it) }.orEmpty())
     }
-    // A day with no entry yet starts from the default calorie value; an existing entry shows exactly what was saved.
+    // Both boxes start empty on a new day; the calorie suggestion is only shown as a hint below the box.
     var calories by rememberSaveable(*keys) {
-        mutableStateOf(
-            if (entry != null) {
-                entry.calories?.let { formatNumber(eu.fromKcal(it), 1) }.orEmpty()
-            } else {
-                suggestedCalories?.let { eu.format(it) }.orEmpty()
-            }
-        )
+        mutableStateOf(entry?.calories?.let { formatNumber(eu.fromKcal(it), 1) }.orEmpty())
     }
     var justSaved by remember { mutableStateOf(false) }
     LaunchedEffect(justSaved) {
@@ -340,6 +334,10 @@ private fun LogCard(
                     onValueChange = { calories = it },
                     label = { Text(if (eu.label == "kcal") "Calories" else "Energy") },
                     suffix = { Text(eu.label) },
+                    supportingText = suggestedCalories?.let {
+                        val hint = if (settings.defaultCalories == DefaultCalories.PREVIOUS) "Last" else "Target"
+                        { Text("$hint ${eu.format(it)}") }
+                    },
                     singleLine = true,
                     isError = caloriesError,
                     shape = RoundedCornerShape(16.dp),

@@ -4,7 +4,7 @@ import java.time.LocalDate
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
-/** What the calories field is pre-filled with on a day that has no entry yet. */
+/** Which suggestion is shown under the calories box. */
 enum class DefaultCalories { NEED_TO_EAT, PREVIOUS, NONE }
 
 /** How a series is drawn on the graph. Tapping its toggle cycles through these in order. */

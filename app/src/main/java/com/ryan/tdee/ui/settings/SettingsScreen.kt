@@ -163,11 +163,11 @@ fun SettingsScreen(viewModel: TdeeViewModel, onBack: () -> Unit, onOpenGraphSett
             }
             item {
                 SettingItem(
-                    "Default calorie value",
+                    "Calorie hint",
                     when (s.defaultCalories) {
-                        DefaultCalories.NEED_TO_EAT -> "\"Need to eat\" value"
-                        DefaultCalories.PREVIOUS -> "Last logged calories"
-                        DefaultCalories.NONE -> "Empty"
+                        DefaultCalories.NEED_TO_EAT -> "Show your \"need to eat\" target"
+                        DefaultCalories.PREVIOUS -> "Show your last logged calories"
+                        DefaultCalories.NONE -> "No hint"
                     },
                 ) { dialog = Dialog.DEFAULT_CALORIES }
             }
@@ -301,11 +301,11 @@ fun SettingsScreen(viewModel: TdeeViewModel, onBack: () -> Unit, onOpenGraphSett
             },
         )
         Dialog.DEFAULT_CALORIES -> ChoiceDialog(
-            title = "Default calorie value",
+            title = "Calorie hint",
             choices = listOf(
-                Choice(DefaultCalories.NEED_TO_EAT, "\"Need to eat\" value", "Pre-fill new days with your target"),
-                Choice(DefaultCalories.PREVIOUS, "Last logged calories", "Pre-fill with what you logged most recently"),
-                Choice(DefaultCalories.NONE, "Empty", "Leave the field blank"),
+                Choice(DefaultCalories.NEED_TO_EAT, "\"Need to eat\" target", "Show today's target under the calories box"),
+                Choice(DefaultCalories.PREVIOUS, "Last logged calories", "Show what you logged most recently"),
+                Choice(DefaultCalories.NONE, "No hint", "Show nothing under the calories box"),
             ),
             selected = s.defaultCalories,
             onDismiss = { dialog = null },
