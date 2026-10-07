@@ -75,8 +75,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.ryan.tdee.core.Analysis
-import com.ryan.tdee.core.DefaultCalories
 import com.ryan.tdee.core.Entry
 import com.ryan.tdee.core.Plan
 import com.ryan.tdee.core.Settings
@@ -135,7 +133,6 @@ fun HomeScreen(viewModel: TdeeViewModel, onOpenProgress: () -> Unit, onOpenSetti
                 LogCard(
                     date = date,
                     entry = a.entry(date),
-                    suggestedCalories = remember(a, date, plan) { suggestedCalories(a, date, plan) },
                     settings = a.settings,
                     onSave = { weightKg, calories ->
                         viewModel.save(date, weightKg, calories)
@@ -158,13 +155,6 @@ fun HomeScreen(viewModel: TdeeViewModel, onOpenProgress: () -> Unit, onOpenSetti
         }
     }
 }
-
-private fun suggestedCalories(analysis: Analysis, date: LocalDate, plan: Plan?): Double? =
-    when (analysis.settings.defaultCalories) {
-        DefaultCalories.NEED_TO_EAT -> plan?.needToEat
-        DefaultCalories.PREVIOUS -> analysis.previousCalories(date)
-        DefaultCalories.NONE -> null
-    }
 
 @Composable
 private fun DateSelector(date: LocalDate, onShift: (Long) -> Unit, onPick: (LocalDate) -> Unit) {
@@ -266,7 +256,6 @@ private fun Stat(label: String, value: String?, unit: String, modifier: Modifier
 private fun LogCard(
     date: LocalDate,
     entry: Entry?,
-    suggestedCalories: Double?,
     settings: Settings,
     onSave: (weightKg: Double?, calories: Double?) -> Unit,
 ) {
@@ -276,7 +265,7 @@ private fun LogCard(
     var weight by rememberSaveable(*keys) {
         mutableStateOf(entry?.weightKg?.let { wu.format(it) }.orEmpty())
     }
-    // Both boxes start empty on a new day; the calorie suggestion is only shown as a hint below the box.
+    // Both boxes start empty on a day with no entry; a logged day shows exactly what was saved.
     var calories by rememberSaveable(*keys) {
         mutableStateOf(entry?.calories?.let { formatNumber(eu.fromKcal(it), 1) }.orEmpty())
     }
@@ -334,10 +323,6 @@ private fun LogCard(
                     onValueChange = { calories = it },
                     label = { Text(if (eu.label == "kcal") "Calories" else "Energy") },
                     suffix = { Text(eu.label) },
-                    supportingText = suggestedCalories?.let {
-                        val hint = if (settings.defaultCalories == DefaultCalories.PREVIOUS) "Last" else "Target"
-                        { Text("$hint ${eu.format(it)}") }
-                    },
                     singleLine = true,
                     isError = caloriesError,
                     shape = RoundedCornerShape(16.dp),

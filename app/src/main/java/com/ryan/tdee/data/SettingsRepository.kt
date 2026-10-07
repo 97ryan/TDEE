@@ -32,7 +32,6 @@ class SettingsRepository(context: Context) {
         val days = intPreferencesKey("days")
         val startDate = longPreferencesKey("start_epoch_day")
         val algorithm = stringPreferencesKey("algorithm")
-        val defaultCalories = stringPreferencesKey("default_calories")
         val theme = stringPreferencesKey("theme")
         val dynamicColor = booleanPreferencesKey("dynamic_color")
         val weightUnit = stringPreferencesKey("weight_unit")
@@ -53,7 +52,6 @@ class SettingsRepository(context: Context) {
             days = this[Keys.days] ?: d.days,
             startDate = this[Keys.startDate]?.let(LocalDate::ofEpochDay),
             algorithm = this[Keys.algorithm].toEnum(d.algorithm),
-            defaultCalories = this[Keys.defaultCalories].toEnum(d.defaultCalories),
             themeMode = this[Keys.theme].toEnum(d.themeMode),
             dynamicColor = this[Keys.dynamicColor] ?: d.dynamicColor,
             weightUnit = this[Keys.weightUnit].toEnum(d.weightUnit),
@@ -73,7 +71,6 @@ class SettingsRepository(context: Context) {
         this[Keys.days] = s.days
         if (s.startDate != null) this[Keys.startDate] = s.startDate.toEpochDay() else remove(Keys.startDate)
         this[Keys.algorithm] = s.algorithm.name
-        this[Keys.defaultCalories] = s.defaultCalories.name
         this[Keys.theme] = s.themeMode.name
         this[Keys.dynamicColor] = s.dynamicColor
         this[Keys.weightUnit] = s.weightUnit.name

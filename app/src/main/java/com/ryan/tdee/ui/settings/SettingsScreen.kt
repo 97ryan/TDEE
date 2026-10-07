@@ -59,7 +59,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ryan.tdee.BuildConfig
 import com.ryan.tdee.core.Algorithm
-import com.ryan.tdee.core.DefaultCalories
 import com.ryan.tdee.core.EnergyUnit
 import com.ryan.tdee.core.KCAL_PER_KG
 import com.ryan.tdee.core.Settings
@@ -81,7 +80,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 
-private enum class Dialog { GOAL, DAYS, ALGORITHM, START_DATE, DEFAULT_CALORIES, CLEAR, ABOUT_ALGORITHM }
+private enum class Dialog { GOAL, DAYS, ALGORITHM, START_DATE, CLEAR, ABOUT_ALGORITHM }
 
 @Composable
 fun SettingsScreen(viewModel: TdeeViewModel, onBack: () -> Unit, onOpenGraphSettings: () -> Unit) {
@@ -160,16 +159,6 @@ fun SettingsScreen(viewModel: TdeeViewModel, onBack: () -> Unit, onOpenGraphSett
                     "Calculation starting date",
                     s.startDate?.let { "From ${dateLabel(it)}" } ?: "From the first entry",
                 ) { dialog = Dialog.START_DATE }
-            }
-            item {
-                SettingItem(
-                    "Calorie hint",
-                    when (s.defaultCalories) {
-                        DefaultCalories.NEED_TO_EAT -> "Show your \"need to eat\" target"
-                        DefaultCalories.PREVIOUS -> "Show your last logged calories"
-                        DefaultCalories.NONE -> "No hint"
-                    },
-                ) { dialog = Dialog.DEFAULT_CALORIES }
             }
             item {
                 SettingItem("How TDEE is calculated", null) { dialog = Dialog.ABOUT_ALGORITHM }
@@ -299,17 +288,6 @@ fun SettingsScreen(viewModel: TdeeViewModel, onBack: () -> Unit, onOpenGraphSett
                     dialog = null
                 }) { Text("Use first entry") }
             },
-        )
-        Dialog.DEFAULT_CALORIES -> ChoiceDialog(
-            title = "Calorie hint",
-            choices = listOf(
-                Choice(DefaultCalories.NEED_TO_EAT, "\"Need to eat\" target", "Show today's target under the calories box"),
-                Choice(DefaultCalories.PREVIOUS, "Last logged calories", "Show what you logged most recently"),
-                Choice(DefaultCalories.NONE, "No hint", "Show nothing under the calories box"),
-            ),
-            selected = s.defaultCalories,
-            onDismiss = { dialog = null },
-            onSelect = { d -> update { it.copy(defaultCalories = d) } },
         )
         Dialog.CLEAR -> ConfirmDialog(
             title = "Clear all data?",

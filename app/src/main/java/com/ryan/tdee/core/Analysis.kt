@@ -27,9 +27,6 @@ class Analysis(entries: List<Entry>, val settings: Settings) {
 
     fun daysLogged(date: LocalDate): Long = calculator.daysLogged(date)
 
-    fun previousCalories(date: LocalDate): Double? =
-        entries.lastOrNull { it.date < date && it.calories != null }?.calories
-
     /** TDEE for every logged day, as shown in the table and written to CSV exports. */
     val tdeeByDate: Map<LocalDate, Double> by lazy {
         buildMap { entries.forEach { e -> calculator.estimate(e.date)?.let { put(e.date, it.tdee) } } }

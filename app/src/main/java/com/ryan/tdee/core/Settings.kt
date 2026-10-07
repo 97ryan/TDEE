@@ -4,9 +4,6 @@ import java.time.LocalDate
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
-/** Which suggestion is shown under the calories box. */
-enum class DefaultCalories { NEED_TO_EAT, PREVIOUS, NONE }
-
 /** How a series is drawn on the graph. Tapping its toggle cycles through these in order. */
 enum class SeriesMode {
     BOTH, POINTS, LINE, OFF;
@@ -30,7 +27,6 @@ data class Settings(
     val days: Int = 21,
     val startDate: LocalDate? = null,
     val algorithm: Algorithm = Algorithm.CLASSIC,
-    val defaultCalories: DefaultCalories = DefaultCalories.NEED_TO_EAT,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = true,
     val weightUnit: WeightUnit = WeightUnit.KG,
