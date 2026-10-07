@@ -13,25 +13,21 @@ android {
         applicationId = "com.ryan.tdee"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
     }
 
     signingConfigs {
-        create("release") {
-            // A private keystore can be supplied through the environment (e.g. CI secrets);
-            // otherwise the committed development keystore keeps every build updatable in place.
-            val keystore = System.getenv("TDEE_KEYSTORE")
-            if (keystore != null) {
+        // CI signs sideload builds with one fixed key (from repository secrets) so each new
+        // version installs as an update over the last. Without it the release APK is unsigned,
+        // which is what F-Droid wants (it signs with its own key).
+        val keystore = providers.gradleProperty("releaseKeystore").orNull
+        if (keystore != null) {
+            create("release") {
                 storeFile = file(keystore)
-                storePassword = System.getenv("TDEE_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("TDEE_KEY_ALIAS")
-                keyPassword = System.getenv("TDEE_KEY_PASSWORD")
-            } else {
-                storeFile = rootProject.file("keystore/dev.jks")
-                storePassword = "tdee-dev"
-                keyAlias = "tdee"
-                keyPassword = "tdee-dev"
+                storePassword = providers.gradleProperty("releaseKeystorePassword").get()
+                keyAlias = providers.gradleProperty("releaseKeyAlias").getOrElse("tdee")
+                keyPassword = storePassword
             }
         }
     }
@@ -41,7 +37,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.findByName("release")
+                ?: if (project.hasProperty("testSigning")) signingConfigs.getByName("debug") else null
         }
         debug {
             applicationIdSuffix = ".debug"

@@ -26,9 +26,18 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Test and build release APK
+      - name: Test
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      # A release (minified, fast) build for sideloading. With the RELEASE_KEYSTORE_B64 /
+      # RELEASE_KEYSTORE_PASSWORD secrets it's signed with one fixed key, so new versions install
+      # over old ones. Without them it falls back to this run's throwaway debug key and is never
+      # published. F-Droid builds the unsigned release from source and signs it themselves.
+      - name: Build installable release
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          ORG_GRADLE_PROJECT_releaseKeystorePassword: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
         run: |
-          ./gradlew --no-daemon testDebugUnitTest assembleRelease
           # Release tag: the pushed tag, otherwise v<versionName> from app/build.gradle.kts.
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             TAG="$GITHUB_REF_NAME"
@@ -37,7 +46,17 @@ jobs:
           fi
           echo "TAG=$TAG" >> "$GITHUB_ENV"
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk "dist/TDEE-$TAG.apk"
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.p12"
+            ./gradlew --no-daemon assembleRelease -PreleaseKeystore="$RUNNER_TEMP/release.p12"
+            rm -f "$RUNNER_TEMP/release.p12"
+            cp app/build/outputs/apk/release/app-release.apk "dist/TDEE-$TAG.apk"
+            echo "SIGNED=true" >> "$GITHUB_ENV"
+          else
+            echo "::warning::RELEASE_KEYSTORE_B64 secret not set; signing with a throwaway debug key"
+            ./gradlew --no-daemon assembleRelease -PtestSigning
+            cp app/build/outputs/apk/release/app-release.apk "dist/TDEE-$TAG-test-signed.apk"
+          fi
 
       # Artifacts count against the account's Actions storage quota; never fail the build on it.
       - uses: actions/upload-artifact@v4
@@ -49,8 +68,9 @@ jobs:
 
       # Every push publishes the APK to the GitHub Release for the current version (not subject to
       # the artifact quota). Bump versionName to start a new release; otherwise the APK is replaced.
+      # Throwaway-signed builds are never published.
       - name: Publish release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && env.SIGNED == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

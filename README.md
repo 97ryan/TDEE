@@ -64,13 +64,15 @@ Every push is built and unit-tested by GitHub Actions (`.github/workflows/build.
 is published to the GitHub Release for the current `versionName` (e.g. `v1.0.0`). Bump `versionName`
 (and `versionCode`) in `app/build.gradle.kts` to start a new release.
 
-Release builds are signed with `keystore/dev.jks` (password `tdee-dev`) so that every build installs
-over the previous one. To sign with your own key, set `TDEE_KEYSTORE`, `TDEE_KEYSTORE_PASSWORD`,
-`TDEE_KEY_ALIAS` and `TDEE_KEY_PASSWORD`.
+CI signs release APKs with a private key stored in two repository secrets, `RELEASE_KEYSTORE_B64`
+(the base64-encoded PKCS12 keystore) and `RELEASE_KEYSTORE_PASSWORD`, so every version installs
+over the last. Without those secrets CI falls back to a throwaway debug key and publishes nothing.
+Locally, `./gradlew assembleRelease` produces an unsigned APK (what F-Droid builds); add
+`-PreleaseKeystore=path/to/key.p12 -PreleaseKeystorePassword=…` to sign it, or `-PtestSigning`
+for a debug-signed one.
 
 ## F-Droid readiness
 
 Only open-source AndroidX/Jetpack dependencies from Google Maven and Maven Central. No proprietary
 libraries, trackers or network access, and the dependency-info blob is disabled. Before submitting:
-pick a final `applicationId`, add a licence, add `fastlane/metadata`, and exclude `keystore/`
-(F-Droid builds and signs from source).
+pick a final `applicationId`, add a licence, and add `fastlane/metadata` (F-Droid builds and signs from source).
