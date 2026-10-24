@@ -1,6 +1,10 @@
 package com.ryan.tdee
 
+import android.app.Activity
+import android.app.Instrumentation
+import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -18,11 +22,17 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.espresso.intent.Intents
+import androidx.test.espresso.intent.Intents.intending
+import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.ryan.tdee.core.Algorithm
 import com.ryan.tdee.core.CsvFormat
+import com.ryan.tdee.core.EnergyUnit
 import com.ryan.tdee.core.Settings
 import com.ryan.tdee.core.ThemeMode
 import com.ryan.tdee.core.WeightUnit
@@ -33,6 +43,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -53,13 +64,18 @@ class AppFlowTest {
     fun resetState() = runBlocking {
         app.entryRepository.clear()
         app.settingsRepository.update { Settings() }
+        Intents.init()
     }
+
+    @After
+    fun releaseIntents() = Intents.release()
 
     // ---- helpers ----
 
     private fun waitFor(timeoutMs: Long = 15_000, condition: () -> Boolean) = rule.waitUntil(timeoutMs, condition)
 
-    private fun hasLabel(text: String) = rule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+    private fun hasLabel(text: String, substring: Boolean = false) =
+        rule.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty()
 
     private fun hasDescription(text: String, substring: Boolean = false) =
         rule.onAllNodesWithContentDescription(text, substring = substring).fetchSemanticsNodes().isNotEmpty()
@@ -182,7 +198,9 @@ class AppFlowTest {
 
         rule.onNodeWithText("Table").performClick()
         val yesterday = tableDateLabel(today.minusDays(1))
-        waitFor { hasLabel(yesterday) }
+        waitFor { hasLabel(yesterday) && !hasLabel("Line + dots") }
+        // The header names every column and its unit.
+        listOf("Date", "Weight", "Calories", "TDEE", "kg", "kcal").forEach { assertTrue("missing header $it", hasLabel(it)) }
         shot("08-progress-table")
 
         // Edit a row.
@@ -256,5 +274,109 @@ class AppFlowTest {
         rule.onNodeWithContentDescription("Progress").performClick()
         rule.onNodeWithText("Table").performClick()
         waitFor { hasLabel(tableDateLabel(today)) }
+    }
+
+    @Test
+    fun typedTextSurvivesRotation() {
+        seed()
+        waitForHomeWithEstimate()
+        field(0).performTextInput("80.4")
+        field(1).performTextInput("3100")
+        rule.activityRule.scenario.recreate()
+        waitFor { hasLabel("Need to eat") && field(0).value() == "80.4" }
+        assertEquals("3100", field(1).value())
+    }
+
+    @Test
+    fun poundsAndKilojoulesAreShownEverywhere() {
+        seed(40)
+        runBlocking { app.settingsRepository.update { it.copy(weightUnit = WeightUnit.LB, energyUnit = EnergyUnit.KJ) } }
+        waitForHomeWithEstimate()
+        listOf("lb", "kJ", "kJ/day", "lb/week").forEach { assertTrue("home is missing $it", hasLabel(it)) }
+        shot("12-home-lb-kj")
+
+        rule.onNodeWithContentDescription("Progress").performClick()
+        waitFor { hasDescription("Progress graph", substring = true) }
+        assertTrue(rule.onAllNodesWithText("lb", substring = true).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText("kJ", substring = true).fetchSemanticsNodes().isNotEmpty())
+        shot("13-progress-lb-kj")
+    }
+
+    @Test
+    fun aYearOfDataDrawsEveryRangeAndCanBeScrubbed() {
+        runBlocking {
+            for (i in 1..450) {
+                app.entryRepository.save(today.minusDays(i.toLong()), 70.0 + (450 - i) * 0.02 + (i % 7) * 0.1, 2900.0 + (i % 9) * 40)
+            }
+        }
+        waitForHomeWithEstimate()
+        rule.onNodeWithContentDescription("Progress").performClick()
+        waitFor { hasDescription("Progress graph", substring = true) }
+        for (range in listOf("1M", "3M", "6M", "1Y", "All")) {
+            rule.onNodeWithText(range).performClick()
+            rule.waitForIdle()
+            shot("14-progress-$range")
+        }
+        assertTrue(hasLabel("Latest", substring = true))
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("Progress graph", substring = true))
+            .performTouchInput { swipeLeft() }
+        waitFor { !hasLabel("Latest", substring = true) }
+        shot("15-progress-scrubbed")
+    }
+
+    @Test
+    fun exportWritesTheOriginalFileFormat() {
+        seed(10)
+        val out = File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir, "export.csv").apply { delete() }
+        intending(hasAction(Intent.ACTION_CREATE_DOCUMENT)).respondWith(
+            Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(Uri.fromFile(out)))
+        )
+        waitForHomeWithEstimate()
+        rule.onNodeWithContentDescription("Settings").performClick()
+        waitFor { hasLabel("Days used for calculations") }
+        rule.onNode(hasScrollAction()).performScrollToNode(hasText("Export data to CSV"))
+        rule.onNodeWithText("Export data to CSV").performClick()
+        waitFor { out.exists() && out.length() > 0 }
+
+        val lines = out.readLines()
+        assertEquals("\"Date\",\"Kilograms\",\"Calories\",\"TDEE\"", lines[0])
+        assertEquals(11, lines.size)
+        assertTrue(lines[1].startsWith("\"${today.minusDays(1)}\","))
+        val row = Regex("^\"\\d{4}-\\d{2}-\\d{2}\",\"[^\"]*\",\"[^\"]*\",\"[^\"]*\"$")
+        assertTrue(lines.drop(1).all { row.matches(it) })
+        // And what was exported can be read back unchanged.
+        assertEquals(entries(), CsvFormat.parse(out.readText()).entries)
+    }
+
+    @Test
+    fun importReadsTheOriginalFileFormatAndSkipsBadRows() {
+        val file = File(InstrumentationRegistry.getInstrumentation().targetContext.cacheDir, "import.csv")
+        file.writeText(
+            """
+            "Date","Kilograms","Calories","TDEE"
+            "${today.minusDays(3)}","79.7","","2925"
+            "${today.minusDays(2)}","80.2","2500","2883"
+            "${today.minusDays(1)}","","3000","2422"
+            "not a date","80","2000",""
+            "${today.minusDays(4)}","1e308","2000",""
+            """.trimIndent()
+        )
+        intending(hasAction(Intent.ACTION_OPEN_DOCUMENT)).respondWith(
+            Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(Uri.fromFile(file)))
+        )
+        waitFor { hasLabel("Need to eat") }
+        rule.onNodeWithContentDescription("Settings").performClick()
+        waitFor { hasLabel("Days used for calculations") }
+        rule.onNode(hasScrollAction()).performScrollToNode(hasText("Import data from CSV"))
+        rule.onNodeWithText("Import data from CSV").performClick()
+        waitFor { hasLabel("Imported 3 days, skipped 2 invalid rows") }
+
+        val byDate = entries().associateBy { it.date }
+        assertEquals(3, byDate.size)
+        assertEquals(79.7, byDate.getValue(today.minusDays(3)).weightKg!!, 1e-9)
+        assertNull(byDate.getValue(today.minusDays(3)).calories)
+        assertEquals(2500.0, byDate.getValue(today.minusDays(2)).calories!!, 1e-9)
+        assertNull(byDate.getValue(today.minusDays(1)).weightKg)
+        shot("16-after-import")
     }
 }

@@ -70,11 +70,11 @@ def tap(label, contains=False, timeout=25):
     time.sleep(0.8)
 
 
-def shot(name):
+def shot(name, limit=25):
     with open(f"{OUT}/{name}.png", "wb") as f:
         f.write(adb("exec-out", "screencap", "-p", binary=True))
     print(f"screenshot {name}:")
-    describe(limit=25)
+    describe(limit=limit)
 
 
 def crashed():
@@ -102,7 +102,16 @@ def describe(root=None, limit=70):
                 break
 
 
+SOFT = False
+
+
+class SoftFail(Exception):
+    pass
+
+
 def fail(message):
+    if SOFT:
+        raise SoftFail(message)
     print(f"SMOKE FAILED: {message}")
     print("alive:", alive(), "| keyboard shown:", keyboard_shown())
     print("screen:")
@@ -183,7 +192,7 @@ shot("r06-graph-3m")
 tap("Table")
 wait_for("Calories")
 time.sleep(1)
-shot("r07-table")
+shot("r07-table", limit=80)
 rows = [n for n in find(dump(), "20", contains=True) if re.fullmatch(r"\d{1,2} \w{3} \d{4}", n.get("text", ""))]
 if rows:
     tap_node(rows[0])
@@ -217,4 +226,157 @@ wait_for("Need to eat")
 time.sleep(1)
 shot("r13-home-end")
 check("navigating back")
+
+
+# ---- persistence: everything must survive the app being killed ----
+def device_today():
+    return adb("shell", "date", "+%Y-%m-%d").strip()
+
+
+def table_date_label(iso):
+    year, month, day = iso.split("-")
+    months = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
+    return f"{int(day)} {months[int(month) - 1]} {year}"
+
+
+def restart_app():
+    adb("shell", "am", "force-stop", PKG)
+    time.sleep(1)
+    adb("shell", "monkey", "-p", PKG, "-c", "android.intent.category.LAUNCHER", "1")
+    wait_for("Need to eat")
+
+
+restart_app()
+tap("Settings")
+wait_for("Smoothed: weights recent days more")  # the algorithm chosen earlier is remembered
+adb("shell", "input", "keyevent", "4")
+wait_for("Need to eat")
+tap("Progress")
+tap("Table")
+wait_for(table_date_label(device_today()))  # today's entry is still there
+shot("r14-after-restart", limit=40)
+adb("shell", "input", "keyevent", "4")
+wait_for("Need to eat")
+check("settings and entries survive a restart")
+
+
+# ---- a small phone with large text: nothing may crash or run off the screen ----
+def overlaps(a, b):
+    ax1, ay1, ax2, ay2 = map(int, BOUNDS.search(a.get("bounds")).groups())
+    bx1, by1, bx2, by2 = map(int, BOUNDS.search(b.get("bounds")).groups())
+    w = min(ax2, bx2) - max(ax1, bx1)
+    h = min(ay2, by2) - max(ay1, by1)
+    if w <= 0 or h <= 0:
+        return False
+    smaller = min((ax2 - ax1) * (ay2 - ay1), (bx2 - bx1) * (by2 - by1))
+    return w * h > 0.25 * smaller
+
+
+def layout_problems(screen):
+    root = dump()
+    width = int(adb("shell", "wm", "size").split()[-1].split("x")[0])
+    texts = [n for n in root.iter("node") if (n.get("text") or n.get("content-desc")) and n.get("class") != "android.widget.EditText"]
+    problems = []
+    for n in texts:
+        x1, _, x2, _ = map(int, BOUNDS.search(n.get("bounds")).groups())
+        if x2 > width + 2 or x1 < -2:
+            problems.append(f"{screen}: off screen {n.get('text') or n.get('content-desc')!r} {n.get('bounds')}")
+    for i, a in enumerate(texts):
+        for b in texts[i + 1:]:
+            if overlaps(a, b):
+                problems.append(f"{screen}: overlap {a.get('text') or a.get('content-desc')!r} / {b.get('text') or b.get('content-desc')!r}")
+    return problems
+
+
+def small_screen_pass():
+    adb("shell", "wm", "size", "720x1280")
+    adb("shell", "wm", "density", "320")
+    adb("shell", "settings", "put", "system", "font_scale", "1.6")
+    time.sleep(4)
+    problems = []
+    wait_for("Need to eat")
+    shot("r15-small-home", limit=60)
+    problems += layout_problems("home")
+    tap("Progress")
+    wait_for("Progress graph", contains=True)
+    time.sleep(1.5)
+    shot("r16-small-graph", limit=60)
+    problems += layout_problems("graph")
+    tap("Table")
+    time.sleep(1)
+    shot("r17-small-table", limit=60)
+    problems += layout_problems("table")
+    adb("shell", "input", "keyevent", "4")
+    wait_for("Need to eat")
+    tap("Settings")
+    wait_for("Days used for calculations")
+    shot("r18-small-settings", limit=60)
+    problems += layout_problems("settings")
+    adb("shell", "input", "keyevent", "4")
+    wait_for("Need to eat")
+    for p in problems:
+        print("LAYOUT WARNING:", p)
+    print(f"layout warnings: {len(problems)}")
+
+
+def stage(name, function):
+    """Runs a check whose failure is reported but does not block the release (yet)."""
+    global SOFT
+    SOFT = True
+    try:
+        function()
+        print(f"STAGE OK: {name}")
+    except SoftFail as error:
+        print(f"STAGE FAILED (not blocking): {name}: {error}")
+    except Exception as error:  # noqa: BLE001
+        print(f"STAGE ERROR (not blocking): {name}: {error!r}")
+    finally:
+        SOFT = False
+
+
+try:
+    stage("small screen with large text", small_screen_pass)
+finally:
+    adb("shell", "wm", "size", "reset")
+    adb("shell", "wm", "density", "reset")
+    adb("shell", "settings", "put", "system", "font_scale", "1.0")
+    time.sleep(3)
+check("small screen with large text")
+
+
+# ---- the new day: at midnight the boxes must be empty again, without restarting the app ----
+def midnight_rollover():
+    adb("root")
+    adb("wait-for-device")
+    time.sleep(2)
+    adb("shell", "settings", "put", "global", "auto_time", "0")
+    adb("shell", "settings", "put", "global", "auto_time_zone", "0")
+    iso = device_today()
+    year, month, day = iso.split("-")
+    adb("shell", "date", f"{month}{day}2359{year}.20")  # 23:59:20 today
+    print("device time now:", adb("shell", "date").strip())
+    restart_app()
+    fields = text_fields(dump())
+    tap_node(fields[0])
+    adb("shell", "input", "text", "81")
+    tap_node(text_fields(dump())[1])
+    adb("shell", "input", "text", "2900")
+    hide_keyboard()
+    tap("Save")
+    time.sleep(1)
+    before = [f.get("text") for f in text_fields(dump())]
+    print("boxes before midnight:", before)
+    if before[0] != "81":
+        fail(f"the entry was not saved before midnight: {before}")
+    time.sleep(55)  # past 00:00:00 plus the 1 s margin
+    print("device time now:", adb("shell", "date").strip())
+    after = [f.get("text") for f in text_fields(dump())]
+    print("boxes after midnight:", after)
+    shot("r19-after-midnight", limit=30)
+    if any(after):
+        fail(f"the boxes were not emptied at midnight: {after}")
+
+
+stage("midnight rollover", midnight_rollover)
+check("midnight")
 print("SMOKE PASSED")

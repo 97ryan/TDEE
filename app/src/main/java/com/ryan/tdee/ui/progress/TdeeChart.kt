@@ -33,16 +33,13 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.ryan.tdee.core.DayValue
+import com.ryan.tdee.core.dateTicks
+import com.ryan.tdee.core.fittedAxis
+import com.ryan.tdee.core.niceAxis
 import com.ryan.tdee.core.SeriesMode
 import com.ryan.tdee.core.formatNumber
 import com.ryan.tdee.core.valueOn
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import kotlin.math.abs
-import kotlin.math.ceil
-import kotlin.math.floor
-import kotlin.math.log10
-import kotlin.math.pow
 import kotlin.math.roundToLong
 
 /** One series on the graph: raw daily [points] plus a smoothed [trend] line, already in display units. */
@@ -73,65 +70,6 @@ internal fun ChartSeries.valueAt(day: Long): Double? {
         SeriesMode.LINE -> trendValue()
         SeriesMode.BOTH -> points.valueOn(day) ?: trendValue()
     }
-}
-
-private data class Axis(val min: Double, val max: Double, val step: Double) {
-    val ticks: List<Double>
-        get() = generateSequence(min) { it + step }.takeWhile { it <= max + step / 2 }.take(50).toList()
-    val intervals: Int get() = ((max - min) / step).roundToLong().toInt()
-}
-
-private fun niceStep(raw: Double): Double {
-    if (raw <= 0.0 || raw.isNaN()) return 1.0
-    val magnitude = 10.0.pow(floor(log10(raw)))
-    val fraction = raw / magnitude
-    val nice = when {
-        fraction <= 1.0 -> 1.0
-        fraction <= 2.0 -> 2.0
-        fraction <= 2.5 -> 2.5
-        fraction <= 5.0 -> 5.0
-        else -> 10.0
-    }
-    return nice * magnitude
-}
-
-/** Axis covering [lo]..[hi] with about [target] round-numbered intervals. */
-private fun niceAxis(lo: Double, hi: Double, target: Int): Axis {
-    val (a, b) = if (hi - lo < 1e-9) (lo - 1) to (hi + 1) else lo to hi
-    val step = niceStep((b - a) / target)
-    return Axis(floor(a / step) * step, ceil(b / step) * step, step)
-}
-
-/** Axis covering [lo]..[hi] with exactly [intervals] intervals, so its grid lines match the other axis. */
-private fun fittedAxis(lo: Double, hi: Double, intervals: Int): Axis {
-    val (a, b) = if (hi - lo < 1e-9) (lo - 1) to (hi + 1) else lo to hi
-    var step = niceStep((b - a) / intervals)
-    while (true) {
-        val min = floor(a / step) * step
-        if (min + step * intervals >= b - 1e-9) return Axis(min, min + step * intervals, step)
-        step = niceStep(step * 1.01)
-    }
-}
-
-private val dayMonth = DateTimeFormatter.ofPattern("d MMM")
-private val monthYear = DateTimeFormatter.ofPattern("MMM ''yy")
-
-private fun dateTicks(start: Long, end: Long): List<Pair<Long, String>> {
-    val span = end - start
-    if (span <= 62) {
-        val step = listOf(1L, 2L, 7L, 14L).firstOrNull { span / it <= 5 } ?: 14L
-        return (start..end step step).map { it to LocalDate.ofEpochDay(it).format(dayMonth) }
-    }
-    val months = listOf(1, 2, 3, 6, 12, 24).firstOrNull { span / 30.4 / it <= 5 } ?: 24
-    val ticks = mutableListOf<Pair<Long, String>>()
-    var month = LocalDate.ofEpochDay(start).withDayOfMonth(1).plusMonths(1)
-    while (month.toEpochDay() <= end) {
-        if ((month.year * 12 + month.monthValue - 1) % months == 0) {
-            ticks += month.toEpochDay() to month.format(monthYear)
-        }
-        month = month.plusMonths(1)
-    }
-    return ticks
 }
 
 private fun range(series: List<ChartSeries>, start: Long, end: Long): Pair<Double, Double>? {
@@ -176,7 +114,7 @@ fun TdeeChart(
     }
     val rightAxis = remember(series, startDay, endDay, leftAxis) {
         val r = range(series.filter { it.rightAxis }, startDay, endDay)
-        fittedAxis(r?.first ?: 0.0, r?.second ?: 1.0, leftAxis.intervals.coerceAtLeast(1))
+        fittedAxis(r?.first ?: 0.0, r?.second ?: 1.0, leftAxis.intervals)
     }
     val xTicks = remember(startDay, endDay) { dateTicks(startDay, endDay) }
 

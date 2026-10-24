@@ -60,9 +60,15 @@ Requires JDK 17 and the Android SDK (API 35).
 ./gradlew testDebugUnitTest assembleRelease
 ```
 
-Every push is built and unit-tested by GitHub Actions (`.github/workflows/build.yml`), and the APK
-is published to the GitHub Release for the current `versionName` (e.g. `v1.0.0`). Bump `versionName`
-(and `versionCode`) in `app/build.gradle.kts` to start a new release.
+Every push is checked by GitHub Actions (`.github/workflows/build.yml`):
+
+- unit tests (`app/src/test`), including a check of the TDEE maths against the original app's numbers
+- Android lint
+- UI tests (`app/src/androidTest`) that drive the real app on Android 8 and Android 14 emulators
+- a smoke test (`scripts/ui_smoke.py`) that installs the exact release APK and taps through every screen
+
+If they all pass, the APK is published to the GitHub Release for the current `versionName` (e.g.
+`v1.0.4`). Bump `versionName` (and `versionCode`) in `app/build.gradle.kts` to start a new release.
 
 CI signs release APKs with a private key stored in two repository secrets, `RELEASE_KEYSTORE_B64`
 (the base64-encoded PKCS12 keystore) and `RELEASE_KEYSTORE_PASSWORD`, so every version installs
