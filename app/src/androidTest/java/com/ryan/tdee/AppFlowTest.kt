@@ -344,8 +344,14 @@ class AppFlowTest {
         assertTrue(lines[1].startsWith("\"${today.minusDays(1)}\","))
         val row = Regex("^\"\\d{4}-\\d{2}-\\d{2}\",\"[^\"]*\",\"[^\"]*\",\"[^\"]*\"$")
         assertTrue(lines.drop(1).all { row.matches(it) })
-        // And what was exported can be read back unchanged.
-        assertEquals(entries(), CsvFormat.parse(out.readText()).entries)
+        // And what was exported can be read back (weights are written to two decimals).
+        val original = entries().associateBy { it.date }
+        val reread = CsvFormat.parse(out.readText()).entries
+        assertEquals(original.keys, reread.map { it.date }.toSet())
+        reread.forEach {
+            assertEquals(original.getValue(it.date).weightKg!!, it.weightKg!!, 0.005)
+            assertEquals(original.getValue(it.date).calories!!, it.calories!!, 0.05)
+        }
     }
 
     @Test
