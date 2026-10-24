@@ -35,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import com.ryan.tdee.core.DayValue
 import com.ryan.tdee.core.SeriesMode
 import com.ryan.tdee.core.formatNumber
-import com.ryan.tdee.core.latestOnOrBefore
 import com.ryan.tdee.core.valueOn
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -54,6 +53,27 @@ data class ChartSeries(
     val rightAxis: Boolean,
     val mode: SeriesMode,
 )
+
+/** A trend value is only carried forward this many days, so a series that stopped isn't shown as flat. */
+private const val MAX_TREND_GAP_DAYS = 7L
+
+/**
+ * The number shown for [day], used for both the scrub marker and the readout so they always agree:
+ * the logged value if the series draws dots and has one that day, otherwise the trend line's value.
+ */
+internal fun ChartSeries.valueAt(day: Long): Double? {
+    fun trendValue(): Double? {
+        val i = trend.binarySearch { it.day.compareTo(day) }
+        val at = if (i >= 0) i else -i - 2
+        return if (at >= 0 && day - trend[at].day <= MAX_TREND_GAP_DAYS) trend[at].value else null
+    }
+    return when (mode) {
+        SeriesMode.OFF -> null
+        SeriesMode.POINTS -> points.valueOn(day)
+        SeriesMode.LINE -> trendValue()
+        SeriesMode.BOTH -> points.valueOn(day) ?: trendValue()
+    }
+}
 
 private data class Axis(val min: Double, val max: Double, val step: Double) {
     val ticks: List<Double>
@@ -275,10 +295,7 @@ fun TdeeChart(
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())),
             )
             series.forEachIndexed { i, s ->
-                if (s.mode == SeriesMode.OFF) return@forEachIndexed
-                val value = (if (s.mode.showLine) s.trend.latestOnOrBefore(selectedDay) else null)
-                    ?: s.points.valueOn(selectedDay)
-                    ?: return@forEachIndexed
+                val value = s.valueAt(selectedDay) ?: return@forEachIndexed
                 val center = Offset(sx, y(value, s.rightAxis))
                 val alpha = maxOf(pointAlpha[i], lineAlpha[i])
                 drawCircle(surface.copy(alpha = alpha), 6.dp.toPx(), center)

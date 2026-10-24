@@ -73,6 +73,8 @@ def tap(label, contains=False, timeout=25):
 def shot(name):
     with open(f"{OUT}/{name}.png", "wb") as f:
         f.write(adb("exec-out", "screencap", "-p", binary=True))
+    print(f"screenshot {name}:")
+    describe(limit=25)
 
 
 def crashed():
@@ -83,9 +85,29 @@ def alive():
     return bool(adb("shell", "pidof", PKG).strip())
 
 
+def describe(root=None, limit=70):
+    """Prints what is on screen as text: one line per node that has text, a description or input."""
+    try:
+        root = root if root is not None else dump()
+    except Exception as error:  # the app may be gone
+        print(f"  (could not read the screen: {error})")
+        return
+    shown = 0
+    for n in root.iter("node"):
+        text, desc = n.get("text", ""), n.get("content-desc", "")
+        if text or desc or n.get("class") == "android.widget.EditText":
+            print(f'  {n.get("class", "").split(".")[-1]:<10} text={text!r} desc={desc!r} {n.get("bounds")}')
+            shown += 1
+            if shown >= limit:
+                break
+
+
 def fail(message):
     print(f"SMOKE FAILED: {message}")
-    print(adb("logcat", "-d", "-b", "crash")[-4000:])
+    print("alive:", alive(), "| keyboard shown:", keyboard_shown())
+    print("screen:")
+    describe()
+    print("crash log:", adb("logcat", "-d", "-b", "crash")[-4000:] or "(empty)")
     sys.exit(1)
 
 
@@ -94,6 +116,28 @@ def check(step):
         shot("crash-after-" + re.sub(r"\W+", "-", step))
         fail(f"app crashed during: {step}")
     print(f"ok: {step}")
+
+
+def keyboard_shown():
+    return "mInputShown=true" in adb("shell", "dumpsys", "input_method")
+
+
+def hide_keyboard():
+    # Back closes the keyboard; only press it when the keyboard is up, or it would leave the screen.
+    if keyboard_shown():
+        adb("shell", "input", "keyevent", "4")
+        time.sleep(1)
+
+
+def scroll_to(label, contains=False, attempts=8):
+    for _ in range(attempts):
+        found = find(dump(), label, contains)
+        if found:
+            return found[0]
+        adb("shell", "input", "swipe", "540", "1800", "540", "900", "300")
+        time.sleep(0.8)
+    shot("failure-scrolling-to-" + re.sub(r"\W+", "-", label))
+    fail(f"could not scroll to {label!r}")
 
 
 def text_fields(root):
@@ -107,16 +151,20 @@ wait_for("Need to eat")
 shot("r01-home-empty")
 check("launch")
 
-# Log twelve days ending today, going backwards. Enter on the calories box saves.
+# Log twelve days ending today, going backwards.
 for i in range(12):
     fields = text_fields(dump())
     if len(fields) < 2:
         fail("could not find the weight and calories boxes")
     tap_node(fields[0])
+    time.sleep(0.6)
     adb("shell", "input", "text", f"{80.0 + (i % 4) * 0.1 - i * 0.02:.2f}")
+    fields = text_fields(dump())  # the keyboard may have moved things
     tap_node(fields[1])
+    time.sleep(0.6)
     adb("shell", "input", "text", str(2800 + (i % 3) * 100))
-    adb("shell", "input", "keyevent", "66")
+    hide_keyboard()
+    tap("Save")
     time.sleep(1.2)
     if i == 0:
         shot("r02-home-after-first-save")
@@ -156,10 +204,9 @@ tap("Smoothed")
 tap("How TDEE is calculated")
 wait_for("Got it")
 tap("Got it")
-adb("shell", "input", "swipe", "540", "1700", "540", "500")
-time.sleep(1)
+tap_node(scroll_to("Graph settings"))
+time.sleep(0.8)
 shot("r11-settings-scrolled")
-tap("Graph settings")
 wait_for("Weight trend line smoothing")
 shot("r12-graph-settings")
 check("settings screens")

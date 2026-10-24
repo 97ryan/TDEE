@@ -91,9 +91,7 @@ import com.ryan.tdee.core.GraphRange
 import com.ryan.tdee.core.Limits
 import com.ryan.tdee.core.SeriesMode
 import com.ryan.tdee.core.formatNumber
-import com.ryan.tdee.core.latestOnOrBefore
 import com.ryan.tdee.core.parseNumber
-import com.ryan.tdee.core.valueOn
 import com.ryan.tdee.ui.TdeeViewModel
 import com.ryan.tdee.ui.components.AppIcons
 import com.ryan.tdee.ui.components.format
@@ -231,12 +229,7 @@ private fun ReadoutRow(series: List<ChartSeries>, day: Long, isLatest: Boolean, 
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             series.forEachIndexed { i, s ->
-                val value = when {
-                    s.mode == SeriesMode.OFF -> null
-                    s.mode == SeriesMode.POINTS -> s.points.valueOn(day)
-                    s.mode == SeriesMode.LINE -> s.trend.latestOnOrBefore(day)
-                    else -> s.points.valueOn(day) ?: s.trend.latestOnOrBefore(day)
-                }
+                val value = s.valueAt(day)
                 if (value != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(8.dp).background(s.color, CircleShape))
