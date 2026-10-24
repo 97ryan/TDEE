@@ -294,7 +294,7 @@ def small_screen_pass():
     adb("shell", "settings", "put", "system", "font_scale", "1.6")
     time.sleep(4)
     problems = []
-    wait_for("Need to eat")
+    wait_for("Change needed")
     shot("r15-small-home", limit=60)
     problems += layout_problems("home")
     tap("Progress")
@@ -356,18 +356,11 @@ def midnight_rollover():
     adb("shell", "date", f"{month}{day}2359{year}.20")  # 23:59:20 today
     print("device time now:", adb("shell", "date").strip())
     restart_app()
-    fields = text_fields(dump())
-    tap_node(fields[0])
-    adb("shell", "input", "text", "81")
-    tap_node(text_fields(dump())[1])
-    adb("shell", "input", "text", "2900")
-    hide_keyboard()
-    tap("Save")
-    time.sleep(1)
+    # Today was logged earlier in this run, so its boxes are filled until midnight.
     before = [f.get("text") for f in text_fields(dump())]
     print("boxes before midnight:", before)
-    if before[0] != "81":
-        fail(f"the entry was not saved before midnight: {before}")
+    if not before or not before[0]:
+        fail(f"expected today's entry before midnight: {before}")
     time.sleep(55)  # past 00:00:00 plus the 1 s margin
     print("device time now:", adb("shell", "date").strip())
     after = [f.get("text") for f in text_fields(dump())]

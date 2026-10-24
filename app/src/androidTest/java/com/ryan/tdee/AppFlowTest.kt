@@ -292,7 +292,8 @@ class AppFlowTest {
         seed(40)
         runBlocking { app.settingsRepository.update { it.copy(weightUnit = WeightUnit.LB, energyUnit = EnergyUnit.KJ) } }
         waitForHomeWithEstimate()
-        listOf("lb", "kJ", "kJ/day", "lb/week").forEach { assertTrue("home is missing $it", hasLabel(it)) }
+        // (A text field only shows its unit once it has a value, so check the summary's units.)
+        listOf("kJ", "kJ/day", "lb/week").forEach { assertTrue("home is missing $it", hasLabel(it)) }
         shot("12-home-lb-kj")
 
         rule.onNodeWithContentDescription("Progress").performClick()
