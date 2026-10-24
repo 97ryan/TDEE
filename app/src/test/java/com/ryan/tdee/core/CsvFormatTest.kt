@@ -55,11 +55,41 @@ class CsvFormatTest {
     }
 
     @Test
+    fun skipsImplausibleValuesAndDates() {
+        val today = LocalDate.of(2026, 10, 24)
+        val csv = """
+            Date,Kilograms,Calories
+            2026-10-24,80,2500
+            2026-10-25,80,2500
+            2026-10-26,80,2500
+            1999-12-31,80,2500
+            9999-12-31,80,2500
+            2026-10-01,1e308,2500
+            2026-10-02,0,2500
+            2026-10-03,7000,2500
+            2026-10-04,80,-5
+            2026-10-05,80,99999999
+            2026-10-06,80,0
+        """.trimIndent()
+        val result = CsvFormat.parse(csv, today)
+        assertEquals(listOf(LocalDate.of(2026, 10, 6), LocalDate.of(2026, 10, 24), LocalDate.of(2026, 10, 25)), result.entries.map { it.date })
+        assertEquals(8, result.skippedRows)
+    }
+
+    @Test
+    fun readsByteOrderMarkAndWindowsLineEndings() {
+        val result = CsvFormat.parse("\uFEFF\"Date\",\"Kilograms\"\r\n\"2026-01-02\",\"80\"\r\n")
+        assertEquals(listOf(Entry(LocalDate.of(2026, 1, 2), 80.0, null)), result.entries)
+    }
+
+    @Test
     fun formatsNumbers() {
         assertEquals("80", formatNumber(80.0, 2))
         assertEquals("79.22", formatNumber(79.2234, 2))
         assertEquals("+0.02", formatSigned(0.0249, 2))
         assertEquals("0", formatSigned(-0.001, 2))
         assertEquals(79.7, parseNumber(" 79,7 "))
+        assertEquals("—", formatNumber(Double.NaN, 2))
+        assertEquals("—", formatSigned(Double.POSITIVE_INFINITY, 0))
     }
 }

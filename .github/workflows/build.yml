@@ -14,8 +14,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    permissions:
-      contents: write # to publish the APK to the GitHub Release
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      signed: ${{ steps.release.outputs.signed }}
     steps:
       - uses: actions/checkout@v4
 
@@ -26,7 +27,7 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Test
+      - name: Unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
 
       # A release (minified, fast) build for sideloading. With the RELEASE_KEYSTORE_B64 /
@@ -34,6 +35,7 @@ jobs:
       # over old ones. Without them it falls back to this run's throwaway debug key and is never
       # published. F-Droid builds the unsigned release from source and signs it themselves.
       - name: Build installable release
+        id: release
         env:
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
           ORG_GRADLE_PROJECT_releaseKeystorePassword: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
@@ -44,38 +46,114 @@ jobs:
           else
             TAG="v$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)"
           fi
-          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           mkdir -p dist
           if [ -n "$KEYSTORE_B64" ]; then
             echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.p12"
             ./gradlew --no-daemon assembleRelease -PreleaseKeystore="$RUNNER_TEMP/release.p12"
             rm -f "$RUNNER_TEMP/release.p12"
             cp app/build/outputs/apk/release/app-release.apk "dist/TDEE-$TAG.apk"
-            echo "SIGNED=true" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::RELEASE_KEYSTORE_B64 secret not set; signing with a throwaway debug key"
             ./gradlew --no-daemon assembleRelease -PtestSigning
             cp app/build/outputs/apk/release/app-release.apk "dist/TDEE-$TAG-test-signed.apk"
           fi
 
-      # Artifacts count against the account's Actions storage quota; never fail the build on it.
+      # Hands the exact APK to the emulator and publish jobs.
       - uses: actions/upload-artifact@v4
-        continue-on-error: true
         with:
           name: TDEE-apk
           path: dist/*.apk
+          retention-days: 3
+
+  # Static analysis. Findings are printed in the log; they don't block a release (yet).
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run lint
+        run: ./gradlew --no-daemon lintDebug
+        continue-on-error: true
+      - name: Lint findings
+        if: always()
+        run: python3 scripts/print_lint.py app/build/reports/lint-results-debug.xml
+
+  # Boots real Android emulators (the oldest supported version and a recent one), runs the UI tests
+  # against the debug build, then smoke-tests the exact release APK that would be published.
+  emulator:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [26, 34]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: TDEE-apk
+          path: dist
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          script: bash scripts/ci-emulator.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: emulator-api-${{ matrix.api-level }}
+          path: ci-out
           retention-days: 7
+
+  # Only an APK that passed the emulator tests is published.
+  publish:
+    needs: [build, emulator]
+    if: github.event_name == 'push' && needs.build.outputs.signed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: TDEE-apk
+          path: dist
 
       # Every push publishes the APK to the GitHub Release for the current version (not subject to
       # the artifact quota). Bump versionName to start a new release; otherwise the APK is replaced.
-      # Throwaway-signed builds are never published.
       - name: Publish release
-        if: github.event_name == 'push' && env.SIGNED == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.build.outputs.tag }}
         run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/*.apk --clobber
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.apk --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" dist/*.apk --target "$GITHUB_SHA" --title "TDEE $TAG" --generate-notes
+            gh release create "$TAG" dist/*.apk --target "$GITHUB_SHA" --title "TDEE $TAG" --generate-notes --repo "$GITHUB_REPOSITORY"
           fi

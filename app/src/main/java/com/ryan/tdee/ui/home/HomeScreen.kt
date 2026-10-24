@@ -76,6 +76,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ryan.tdee.core.Entry
+import com.ryan.tdee.core.Limits
 import com.ryan.tdee.core.Plan
 import com.ryan.tdee.core.Settings
 import com.ryan.tdee.core.formatNumber
@@ -90,7 +91,9 @@ import com.ryan.tdee.ui.components.formatRate
 import com.ryan.tdee.ui.components.formatSigned
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.Duration
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 @Composable
 fun HomeScreen(viewModel: TdeeViewModel, onOpenProgress: () -> Unit, onOpenSettings: () -> Unit) {
@@ -100,6 +103,15 @@ fun HomeScreen(viewModel: TdeeViewModel, onOpenProgress: () -> Unit, onOpenSetti
     val scope = rememberCoroutineScope()
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshToday() }
+    // Also roll over to the new day, with empty boxes, if the app is left open past midnight.
+    LaunchedEffect(Unit) {
+        while (true) {
+            val now = LocalDateTime.now()
+            val midnight = now.toLocalDate().plusDays(1).atStartOfDay()
+            delay(Duration.between(now, midnight).toMillis() + 1_000)
+            viewModel.refreshToday()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -215,7 +227,7 @@ private fun SummaryCard(plan: Plan?, settings: Settings) {
             }
             Text(
                 if (plan == null) {
-                    "Log at least two weigh-ins and some calories to get an estimate"
+                    "Keep logging your weight and calories. Your first estimate appears after about a week."
                 } else {
                     "Goal ${wu.formatRate(settings.goalKgPerWeek)} ${wu.label}/week"
                 },
@@ -279,8 +291,8 @@ private fun LogCard(
 
     val weightValue = parseNumber(weight)
     val caloriesValue = parseNumber(calories)
-    val weightError = weight.isNotBlank() && (weightValue == null || weightValue <= 0 || weightValue > 1500)
-    val caloriesError = calories.isNotBlank() && (caloriesValue == null || caloriesValue < 0 || caloriesValue > 100_000)
+    val weightError = weight.isNotBlank() && (weightValue == null || !Limits.isValidWeightKg(wu.toKg(weightValue)))
+    val caloriesError = calories.isNotBlank() && (caloriesValue == null || !Limits.isValidCalories(eu.toKcal(caloriesValue)))
     val canSave = !weightError && !caloriesError && (weight.isNotBlank() || calories.isNotBlank() || entry != null)
 
     val focus = LocalFocusManager.current

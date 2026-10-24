@@ -14,6 +14,8 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
 import com.ryan.tdee.core.parseNumber
 
@@ -27,7 +29,7 @@ fun RollingNumber(text: String, style: TextStyle, modifier: Modifier = Modifier)
     SideEffect { last[0] = text }
 
     val tabular = style.copy(fontFeatureSettings = "tnum")
-    Row(modifier) {
+    Row(modifier.clearAndSetSemantics { contentDescription = text }) {
         text.forEachIndexed { index, char ->
             // Keyed from the right so units, tens and hundreds stay put when the length changes.
             key(text.length - index) {

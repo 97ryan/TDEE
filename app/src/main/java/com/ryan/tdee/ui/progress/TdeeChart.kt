@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -55,7 +57,7 @@ data class ChartSeries(
 
 private data class Axis(val min: Double, val max: Double, val step: Double) {
     val ticks: List<Double>
-        get() = generateSequence(min) { it + step }.takeWhile { it <= max + step / 2 }.toList()
+        get() = generateSequence(min) { it + step }.takeWhile { it <= max + step / 2 }.take(50).toList()
     val intervals: Int get() = ((max - min) / step).roundToLong().toInt()
 }
 
@@ -92,7 +94,7 @@ private fun fittedAxis(lo: Double, hi: Double, intervals: Int): Axis {
 }
 
 private val dayMonth = DateTimeFormatter.ofPattern("d MMM")
-private val monthYear = DateTimeFormatter.ofPattern("MMM yy")
+private val monthYear = DateTimeFormatter.ofPattern("MMM ''yy")
 
 private fun dateTicks(start: Long, end: Long): List<Pair<Long, String>> {
     val span = end - start
@@ -142,7 +144,7 @@ fun TdeeChart(
     onSelect: (Long?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val measurer = rememberTextMeasurer()
+    val measurer = rememberTextMeasurer(cacheSize = 64)
     val labelStyle = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val markerColor = MaterialTheme.colorScheme.onSurface
@@ -183,6 +185,7 @@ fun TdeeChart(
 
     Canvas(
         modifier
+            .semantics { contentDescription = "Progress graph. Touch and drag to read the values for a day." }
             .pointerInput(Unit) {
                 detectTapGestures(onTap = { offset ->
                     val day = dayAt(offset.x)

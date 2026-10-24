@@ -1,6 +1,7 @@
 package com.ryan.tdee.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.LocalDate
@@ -44,11 +45,19 @@ class TdeeCalculatorTest {
     }
 
     @Test
-    fun needsTwoWeighInsAndSomeIntake() {
+    fun needsEnoughWeighInsSpreadOverAboutAWeek() {
         val one = listOf(Entry(start, 70.0, 2000.0))
         assertNull(TdeeCalculator(one, 21, Algorithm.CLASSIC).estimate(start))
-        val noIntake = listOf(Entry(start, 70.0, null), Entry(start.plusDays(1), 70.1, null))
-        assertNull(TdeeCalculator(noIntake, 21, Algorithm.CLASSIC).estimate(start.plusDays(1)))
+        // Two or three weigh-ins a few days apart are noise, not a trend.
+        assertNull(TdeeCalculator(steady(2, 0.1, 2000.0), 21, Algorithm.CLASSIC).estimate(start.plusDays(1)))
+        assertNull(TdeeCalculator(steady(6, 0.1, 2000.0), 21, Algorithm.CLASSIC).estimate(start.plusDays(5)))
+        assertNull(TdeeCalculator(steady(6, 0.1, 2000.0), 21, Algorithm.SMOOTHED).estimate(start.plusDays(5)))
+        assertNotNull(TdeeCalculator(steady(8, 0.1, 2000.0), 21, Algorithm.CLASSIC).estimate(start.plusDays(7)))
+        // Three weigh-ins spanning a week are enough, even with gaps between them.
+        val sparse = listOf(0, 3, 7).map { Entry(start.plusDays(it.toLong()), 70.0 + it * 0.1, 2500.0) }
+        assertNotNull(TdeeCalculator(sparse, 21, Algorithm.CLASSIC).estimate(start.plusDays(7)))
+        val noIntake = steady(10, 0.0, 2000.0).map { it.copy(calories = null) }
+        assertNull(TdeeCalculator(noIntake, 21, Algorithm.CLASSIC).estimate(start.plusDays(9)))
     }
 
     @Test

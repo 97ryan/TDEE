@@ -13,7 +13,8 @@ data class ImportResult(val entries: List<Entry>, val skippedRows: Int)
  *     "2026-10-05","79.7","","2925"
  *
  * Import also accepts files without a header, unquoted fields, a missing TDEE column, ';' or tab
- * delimiters, and a "Pounds" or "Kilojoules" header, which is converted to kg and kcal.
+ * delimiters, and a "Pounds" or "Kilojoules" header, which is converted to kg and kcal. Rows with
+ * unreadable or implausible values (see [Limits]) are skipped and counted rather than imported.
  */
 object CsvFormat {
 
@@ -36,8 +37,8 @@ object CsvFormat {
         }
     }
 
-    fun parse(text: String): ImportResult {
-        val lines = text.removePrefix("﻿").lines().map { it.trim() }.filter { it.isNotEmpty() }
+    fun parse(text: String, today: LocalDate = LocalDate.now()): ImportResult {
+        val lines = text.removePrefix("\uFEFF").lines().map { it.trim() }.filter { it.isNotEmpty() }
         if (lines.isEmpty()) return ImportResult(emptyList(), 0)
 
         val delimiter = detectDelimiter(lines.first())
@@ -59,16 +60,17 @@ object CsvFormat {
         for (line in lines.drop(firstDataLine)) {
             val fields = splitRow(line, delimiter)
             val date = parseDate(fields.getOrNull(0))
-            val weight = parseOptional(fields.getOrNull(1))
-            val calories = parseOptional(fields.getOrNull(2))
-            val weightValid = weight == null || (weight.isNaN().not() && weight > 0)
-            val caloriesValid = calories == null || (calories.isNaN().not() && calories >= 0)
-            if (date == null || !weightValid || !caloriesValid) {
+            val weightKg = parseOptional(fields.getOrNull(1))?.let(weightUnit::toKg)
+            val kcal = parseOptional(fields.getOrNull(2))?.let(energyUnit::toKcal)
+            val valid = date != null && Limits.isValidDate(date, today) &&
+                (weightKg == null || Limits.isValidWeightKg(weightKg)) &&
+                (kcal == null || Limits.isValidCalories(kcal))
+            if (!valid) {
                 skipped++
                 continue
             }
-            if (weight == null && calories == null) continue
-            byDate[date] = Entry(date, weight?.let(weightUnit::toKg), calories?.let(energyUnit::toKcal))
+            if (weightKg == null && kcal == null) continue
+            byDate[date!!] = Entry(date, weightKg, kcal)
         }
         return ImportResult(byDate.values.sortedBy { it.date }, skipped)
     }

@@ -34,6 +34,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import com.ryan.tdee.core.Limits
 import com.ryan.tdee.core.parseNumber
 import java.time.LocalDate
 
@@ -53,8 +54,9 @@ fun DatePickerDialogFor(
 ) {
     val maxMillis = maxDate.toUtcMillis()
     val state = rememberDatePickerState(
-        initialSelectedDateMillis = initial.toUtcMillis(),
-        yearRange = 2000..maxDate.year,
+        // The picker throws if the initial date is outside its range, so clamp it.
+        initialSelectedDateMillis = initial.coerceIn(Limits.EARLIEST_DATE, maxDate).toUtcMillis(),
+        yearRange = Limits.EARLIEST_DATE.year..maxDate.year,
         selectableDates = object : SelectableDates {
             override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= maxMillis
             override fun isSelectableYear(year: Int) = year <= maxDate.year
@@ -100,7 +102,7 @@ fun NumberDialog(
         else -> validate(value)
     }
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
     AlertDialog(
         onDismissRequest = onDismiss,

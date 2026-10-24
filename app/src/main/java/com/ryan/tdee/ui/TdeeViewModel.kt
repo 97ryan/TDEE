@@ -7,6 +7,7 @@ import com.ryan.tdee.TdeeApp
 import com.ryan.tdee.core.Analysis
 import com.ryan.tdee.core.CsvFormat
 import com.ryan.tdee.core.ImportResult
+import com.ryan.tdee.core.Limits
 import com.ryan.tdee.core.Settings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,7 +49,7 @@ class TdeeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectDate(date: LocalDate) {
-        pickedDate.value = if (date >= today.value) null else date
+        pickedDate.value = if (date >= today.value) null else date.coerceAtLeast(Limits.EARLIEST_DATE)
     }
 
     fun shiftDate(days: Long) = selectDate(selectedDate.value.plusDays(days))

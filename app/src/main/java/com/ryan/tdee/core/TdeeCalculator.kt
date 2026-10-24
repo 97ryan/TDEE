@@ -39,7 +39,8 @@ data class Plan(
  * far less sensitive to day-to-day water fluctuations than comparing two single weigh-ins.
  *
  * [Algorithm.CLASSIC] reproduces the original app: an unweighted fit over the selected day and the
- * [days] days before it (so "21 days" spans 22 calendar days).
+ * [days] days before it (so "21 days" spans 22 calendar days). Unlike the original, it gives no
+ * estimate until there are at least three weigh-ins spread over about a week.
  *
  * [Algorithm.SMOOTHED] fits every day in the last `6 × days` days, weighting each by how recent it is
  * (its weight halves every [days] days). Nothing falls off a hard window edge, so the estimate moves
@@ -65,22 +66,27 @@ class TdeeCalculator(
 
     fun estimate(date: LocalDate): Estimate? {
         val window = days.coerceAtLeast(1)
+        // A slope through two or three weigh-ins a day or two apart is just noise (±0.5 kg in a day is
+        // ±3800 kcal), so wait until the weigh-ins cover at least about a week.
+        val minSpan = (window / 3).coerceIn(4, 7).toLong()
         return when (algorithm) {
-            Algorithm.CLASSIC -> fit(date.toEpochDay(), window.toLong()) { 1.0 }
+            Algorithm.CLASSIC -> fit(date.toEpochDay(), window.toLong(), minSpan) { 1.0 }
             Algorithm.SMOOTHED -> {
                 val halfLife = window.toDouble()
-                fit(date.toEpochDay(), window * 6L) { age -> 0.5.pow(age / halfLife) }
+                fit(date.toEpochDay(), window * 6L, minSpan) { age -> 0.5.pow(age / halfLife) }
             }
         }
     }
 
-    private inline fun fit(end: Long, lookback: Long, weightForAge: (Double) -> Double): Estimate? {
+    private inline fun fit(end: Long, lookback: Long, minSpan: Long, weightForAge: (Double) -> Double): Estimate? {
         val from = lowerBound(end - lookback)
 
         var weightSum = 0.0
         var xSum = 0.0
         var ySum = 0.0
         var weighIns = 0
+        var firstWeighIn = Long.MAX_VALUE
+        var lastWeighIn = Long.MIN_VALUE
         var intakeWeightSum = 0.0
         var intakeSum = 0.0
         var i = from
@@ -92,6 +98,8 @@ class TdeeCalculator(
                 xSum += w * x
                 ySum += w * it
                 weighIns++
+                if (epochDays[i] < firstWeighIn) firstWeighIn = epochDays[i]
+                if (epochDays[i] > lastWeighIn) lastWeighIn = epochDays[i]
             }
             sorted[i].calories?.let {
                 intakeWeightSum += w
@@ -99,7 +107,7 @@ class TdeeCalculator(
             }
             i++
         }
-        if (weighIns < 2 || intakeWeightSum == 0.0) return null
+        if (weighIns < 3 || lastWeighIn - firstWeighIn < minSpan || intakeWeightSum == 0.0) return null
 
         val xMean = xSum / weightSum
         val yMean = ySum / weightSum

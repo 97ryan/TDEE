@@ -315,8 +315,23 @@ fun SettingsScreen(viewModel: TdeeViewModel, onBack: () -> Unit, onOpenGraphSett
     }
 }
 
-private fun readText(context: Context, uri: Uri): String =
-    context.contentResolver.openInputStream(uri)!!.use { it.readBytes().toString(Charsets.UTF_8) }
+/** Years of daily data are well under 1 MB; anything this large is not a TDEE file. */
+private const val MAX_IMPORT_BYTES = 5 * 1024 * 1024
+
+private fun readText(context: Context, uri: Uri): String {
+    val input = context.contentResolver.openInputStream(uri) ?: error("couldn't open the file")
+    input.use {
+        val out = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(16 * 1024)
+        while (true) {
+            val read = it.read(buffer)
+            if (read < 0) break
+            out.write(buffer, 0, read)
+            if (out.size() > MAX_IMPORT_BYTES) error("file is too large to be a TDEE export")
+        }
+        return out.toString(Charsets.UTF_8.name())
+    }
+}
 
 private fun LazyListScope.section(title: String) {
     item(key = "section-$title") {

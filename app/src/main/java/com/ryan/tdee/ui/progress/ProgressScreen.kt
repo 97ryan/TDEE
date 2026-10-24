@@ -21,12 +21,15 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -85,6 +88,7 @@ import com.ryan.tdee.core.Analysis
 import com.ryan.tdee.core.DayValue
 import com.ryan.tdee.core.Entry
 import com.ryan.tdee.core.GraphRange
+import com.ryan.tdee.core.Limits
 import com.ryan.tdee.core.SeriesMode
 import com.ryan.tdee.core.formatNumber
 import com.ryan.tdee.core.latestOnOrBefore
@@ -166,7 +170,9 @@ private fun GraphPage(analysis: Analysis, viewModel: TdeeViewModel) {
     }
     val firstDay = graph.firstDay ?: endDay
     val startDay = settings.graphRange.days?.let { maxOf(firstDay, endDay - it) } ?: firstDay
-    var selected by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pickedDay by rememberSaveable { mutableStateOf<Long?>(null) }
+    // Changing the range can leave the picked day off-screen; fall back to the latest values then.
+    val selected = pickedDay?.takeIf { it in startDay..endDay }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -183,7 +189,7 @@ private fun GraphPage(analysis: Analysis, viewModel: TdeeViewModel) {
                 startDay = startDay,
                 endDay = endDay,
                 selectedDay = selected,
-                onSelect = { selected = it },
+                onSelect = { pickedDay = it },
                 modifier = Modifier.fillMaxSize().padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 8.dp),
             )
         }
@@ -211,32 +217,34 @@ private fun GraphPage(analysis: Analysis, viewModel: TdeeViewModel) {
     }
 }
 
-/** Values at the scrubbed day, or the latest values when nothing is selected. */
+/** Values at the scrubbed day, or the latest values when nothing is selected. Hidden series are left out. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ReadoutRow(series: List<ChartSeries>, day: Long, isLatest: Boolean, weightLabel: String, energyLabel: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().height(48.dp)) {
-        AnimatedContent(targetState = day to isLatest, label = "readout", modifier = Modifier.weight(1f)) { (d, latest) ->
-            Column {
-                Text(
-                    (if (latest) "Latest · " else "") + tableDateLabel(LocalDate.ofEpochDay(d)),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    val labels = listOf(weightLabel, energyLabel, energyLabel)
-                    val names = listOf("", "", "TDEE ")
-                    series.forEachIndexed { i, s ->
-                        val value = s.points.valueOn(d) ?: s.trend.latestOnOrBefore(d)
-                        if (value != null) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(8.dp).background(s.color, CircleShape))
-                                Text(
-                                    "${names[i]}${formatNumber(value, if (i == 0) 2 else 0)} ${labels[i]}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    modifier = Modifier.padding(start = 6.dp),
-                                )
-                            }
-                        }
+    val labels = listOf(weightLabel, energyLabel, energyLabel)
+    val names = listOf("", "", "TDEE ")
+    Column(Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Text(
+            (if (isLatest) "Latest · " else "") + tableDateLabel(LocalDate.ofEpochDay(day)),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            series.forEachIndexed { i, s ->
+                val value = when {
+                    s.mode == SeriesMode.OFF -> null
+                    s.mode == SeriesMode.POINTS -> s.points.valueOn(day)
+                    s.mode == SeriesMode.LINE -> s.trend.latestOnOrBefore(day)
+                    else -> s.points.valueOn(day) ?: s.trend.latestOnOrBefore(day)
+                }
+                if (value != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(8.dp).background(s.color, CircleShape))
+                        Text(
+                            "${names[i]}${formatNumber(value, if (i == 0) 2 else 0)} ${labels[i]}",
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(start = 6.dp),
+                        )
                     }
                 }
             }
@@ -337,9 +345,9 @@ private fun TablePage(analysis: Analysis, viewModel: TdeeViewModel) {
                     .padding(horizontal = 20.dp, vertical = 12.dp),
             ) {
                 TableCell("Date", 1.4f, header = true)
-                TableCell(settings.weightUnit.label, 1f, header = true)
-                TableCell(settings.energyUnit.label, 1f, header = true)
-                TableCell("TDEE", 1f, header = true)
+                TableCell("Weight", 1f, header = true, unit = settings.weightUnit.label)
+                TableCell("Calories", 1f, header = true, unit = settings.energyUnit.label)
+                TableCell("TDEE", 1f, header = true, unit = settings.energyUnit.label)
             }
         }
         items(rows, key = { it.date.toEpochDay() }) { entry ->
@@ -370,14 +378,18 @@ private fun TablePage(analysis: Analysis, viewModel: TdeeViewModel) {
 }
 
 @Composable
-private fun RowScope.TableCell(text: String, weight: Float, header: Boolean = false) {
-    Text(
-        text,
-        style = if (header) MaterialTheme.typography.labelLarge else MaterialTheme.typography.bodyLarge,
-        fontWeight = if (header) FontWeight.SemiBold else null,
-        color = if (header) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.weight(weight),
-    )
+private fun RowScope.TableCell(text: String, weight: Float, header: Boolean = false, unit: String? = null) {
+    Column(Modifier.weight(weight)) {
+        Text(
+            text,
+            style = if (header) MaterialTheme.typography.labelLarge else MaterialTheme.typography.bodyLarge,
+            fontWeight = if (header) FontWeight.SemiBold else null,
+            color = if (header) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+        )
+        if (unit != null) {
+            Text(unit, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }
 
 @Composable
@@ -394,8 +406,8 @@ private fun EditEntryDialog(
     var calories by remember { mutableStateOf(entry.calories?.let { formatNumber(eu.fromKcal(it), 1) }.orEmpty()) }
     val weightValue = parseNumber(weight)
     val caloriesValue = parseNumber(calories)
-    val weightError = weight.isNotBlank() && (weightValue == null || weightValue <= 0)
-    val caloriesError = calories.isNotBlank() && (caloriesValue == null || caloriesValue < 0)
+    val weightError = weight.isNotBlank() && (weightValue == null || !Limits.isValidWeightKg(wu.toKg(weightValue)))
+    val caloriesError = calories.isNotBlank() && (caloriesValue == null || !Limits.isValidCalories(eu.toKcal(caloriesValue)))
 
     AlertDialog(
         onDismissRequest = onDismiss,
