@@ -4,6 +4,21 @@ import java.time.LocalDate
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
+/** Seed colours for the theme when wallpaper colours are off. [WHITE] gives a monochrome theme. */
+enum class AccentColor(val label: String, val argb: Int) {
+    BLUE("Blue", 0xFF669DFF.toInt()),
+    CYAN("Cyan", 0xFF00B0C8.toInt()),
+    GREEN("Green", 0xFF4DB65A.toInt()),
+    LIME("Lime", 0xFF86AC2B.toInt()),
+    YELLOW("Yellow", 0xFFB39D00.toInt()),
+    ORANGE("Orange", 0xFFE67E22.toInt()),
+    RED("Red", 0xFFF0706A.toInt()),
+    PINK("Pink", 0xFFE66EA4.toInt()),
+    MAGENTA("Magenta", 0xFFD272CF.toInt()),
+    PURPLE("Purple", 0xFFAE86F0.toInt()),
+    WHITE("White", 0xFFFFFFFF.toInt()),
+}
+
 /** How a series is drawn on the graph. Tapping its toggle cycles through these in order. */
 enum class SeriesMode {
     BOTH, POINTS, LINE, OFF;
@@ -29,6 +44,7 @@ data class Settings(
     val algorithm: Algorithm = Algorithm.CLASSIC,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = true,
+    val accent: AccentColor = AccentColor.BLUE,
     val weightUnit: WeightUnit = WeightUnit.KG,
     val energyUnit: EnergyUnit = EnergyUnit.KCAL,
     val weightSmoothing: Int = 21,

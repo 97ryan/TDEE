@@ -16,6 +16,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ryan.tdee.core.AccentColor
 import com.ryan.tdee.core.ThemeMode
 import com.ryan.tdee.ui.TdeeNavHost
 import com.ryan.tdee.ui.TdeeViewModel
@@ -42,7 +43,11 @@ class MainActivity : ComponentActivity() {
                 )
                 onDispose {}
             }
-            TdeeTheme(darkTheme = dark, dynamicColor = settings?.dynamicColor ?: true) {
+            TdeeTheme(
+                darkTheme = dark,
+                dynamicColor = settings?.dynamicColor ?: true,
+                accent = settings?.accent ?: AccentColor.BLUE,
+            ) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                     // Wait for settings so the first frame already has the right units and theme.
                     if (settings != null) TdeeNavHost(viewModel)

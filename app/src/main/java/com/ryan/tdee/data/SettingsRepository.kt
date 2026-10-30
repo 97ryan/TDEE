@@ -34,6 +34,7 @@ class SettingsRepository(context: Context) {
         val algorithm = stringPreferencesKey("algorithm")
         val theme = stringPreferencesKey("theme")
         val dynamicColor = booleanPreferencesKey("dynamic_color")
+        val accent = stringPreferencesKey("accent")
         val weightUnit = stringPreferencesKey("weight_unit")
         val energyUnit = stringPreferencesKey("energy_unit")
         val weightSmoothing = intPreferencesKey("weight_smoothing")
@@ -54,6 +55,7 @@ class SettingsRepository(context: Context) {
             algorithm = this[Keys.algorithm].toEnum(d.algorithm),
             themeMode = this[Keys.theme].toEnum(d.themeMode),
             dynamicColor = this[Keys.dynamicColor] ?: d.dynamicColor,
+            accent = this[Keys.accent].toEnum(d.accent),
             weightUnit = this[Keys.weightUnit].toEnum(d.weightUnit),
             energyUnit = this[Keys.energyUnit].toEnum(d.energyUnit),
             weightSmoothing = this[Keys.weightSmoothing] ?: d.weightSmoothing,
@@ -73,6 +75,7 @@ class SettingsRepository(context: Context) {
         this[Keys.algorithm] = s.algorithm.name
         this[Keys.theme] = s.themeMode.name
         this[Keys.dynamicColor] = s.dynamicColor
+        this[Keys.accent] = s.accent.name
         this[Keys.weightUnit] = s.weightUnit.name
         this[Keys.energyUnit] = s.energyUnit.name
         this[Keys.weightSmoothing] = s.weightSmoothing

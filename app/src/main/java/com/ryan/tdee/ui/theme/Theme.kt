@@ -11,9 +11,11 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.ryan.tdee.core.AccentColor
 
 /** Colours for the three graph series, kept consistent between the graph and its toggles. */
 data class SeriesColors(val weight: Color, val calories: Color, val tdee: Color)
@@ -26,13 +28,13 @@ val LocalSeriesColors = staticCompositionLocalOf { DarkSeries }
 val supportsDynamicColor: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
 @Composable
-fun TdeeTheme(darkTheme: Boolean, dynamicColor: Boolean, content: @Composable () -> Unit) {
+fun TdeeTheme(darkTheme: Boolean, dynamicColor: Boolean, accent: AccentColor, content: @Composable () -> Unit) {
     val context = LocalContext.current
     val target = when {
         dynamicColor && supportsDynamicColor ->
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        darkTheme -> darkColorScheme()
-        else -> lightColorScheme()
+        dynamicColor -> if (darkTheme) darkColorScheme() else lightColorScheme()
+        else -> remember(accent, darkTheme) { seedColorScheme(accent, darkTheme) }
     }
     CompositionLocalProvider(LocalSeriesColors provides if (darkTheme) DarkSeries else LightSeries) {
         MaterialTheme(colorScheme = target.animated(), content = content)

@@ -13,8 +13,8 @@ android {
         applicationId = "com.ryan.tdee"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "1.0.5"
+        versionCode = 7
+        versionName = "1.0.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -85,6 +85,8 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.datastore.preferences)
+    // Only for its Material colour utilities (tonal palettes from a seed colour).
+    implementation(libs.material)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

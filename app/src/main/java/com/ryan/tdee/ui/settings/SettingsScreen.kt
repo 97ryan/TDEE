@@ -7,6 +7,10 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import com.ryan.tdee.ui.components.AppSwitch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -40,8 +44,6 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -134,7 +136,7 @@ fun SettingsScreen(viewModel: TdeeViewModel, onBack: () -> Unit, onOpenGraphSett
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
+        LazyColumn(Modifier.fillMaxSize().testTag("settings-list"), contentPadding = padding) {
             section("Calculation")
             item {
                 SettingItem(
@@ -172,21 +174,28 @@ fun SettingsScreen(viewModel: TdeeViewModel, onBack: () -> Unit, onOpenGraphSett
                     s.themeMode,
                 ) { mode -> update { it.copy(themeMode = mode) } }
             }
+            item {
+                AccentPicker(
+                    dynamicSelected = s.dynamicColor,
+                    accent = s.accent,
+                    onDefault = { update { it.copy(dynamicColor = true) } },
+                    onAccent = { colour -> update { it.copy(dynamicColor = false, accent = colour) } },
+                )
+            }
             if (supportsDynamicColor) {
                 item {
                     ListItem(
                         headlineContent = { Text("Dynamic colour") },
                         supportingContent = { Text("Use colours from your wallpaper") },
                         trailingContent = {
-                            Switch(
-                                checked = s.dynamicColor,
-                                onCheckedChange = { on -> update { it.copy(dynamicColor = on) } },
-                                thumbContent = if (s.dynamicColor) {
-                                    { Icon(Icons.Filled.Check, null, Modifier.size(SwitchDefaults.IconSize)) }
-                                } else null,
-                            )
+                            AppSwitch(checked = s.dynamicColor, onCheckedChange = null)
                         },
                         colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+                        modifier = Modifier.toggleable(
+                            value = s.dynamicColor,
+                            role = Role.Switch,
+                            onValueChange = { on -> update { it.copy(dynamicColor = on) } },
+                        ),
                     )
                 }
             }

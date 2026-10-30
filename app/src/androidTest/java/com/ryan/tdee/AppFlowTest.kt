@@ -10,13 +10,13 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
@@ -30,6 +30,7 @@ import androidx.test.espresso.intent.Intents.intending
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.ryan.tdee.core.AccentColor
 import com.ryan.tdee.core.Algorithm
 import com.ryan.tdee.core.CsvFormat
 import com.ryan.tdee.core.EnergyUnit
@@ -240,16 +241,16 @@ class AppFlowTest {
         rule.onNodeWithText("Smoothed").performClick()
         waitFor { settings().algorithm == Algorithm.SMOOTHED }
 
-        rule.onNode(hasScrollAction()).performScrollToNode(hasText("Dark"))
+        rule.onNodeWithTag("settings-list").performScrollToNode(hasText("Dark"))
         rule.onNodeWithText("Dark").performClick()
         waitFor { settings().themeMode == ThemeMode.DARK }
         shot("11-settings-dark")
 
-        rule.onNode(hasScrollAction()).performScrollToNode(hasText("Pounds"))
+        rule.onNodeWithTag("settings-list").performScrollToNode(hasText("Pounds"))
         rule.onNodeWithText("Pounds").performClick()
         waitFor { settings().weightUnit == WeightUnit.LB }
 
-        rule.onNode(hasScrollAction()).performScrollToNode(hasText("Clear data"))
+        rule.onNodeWithTag("settings-list").performScrollToNode(hasText("Clear data"))
         rule.onNodeWithText("Clear data").performClick()
         waitFor { hasLabel("Delete everything") }
         rule.onNodeWithText("Delete everything").performClick()
@@ -335,7 +336,7 @@ class AppFlowTest {
         waitForHomeWithEstimate()
         rule.onNodeWithContentDescription("Settings").performClick()
         waitFor { hasLabel("Days used for calculations") }
-        rule.onNode(hasScrollAction()).performScrollToNode(hasText("Export data to CSV"))
+        rule.onNodeWithTag("settings-list").performScrollToNode(hasText("Export data to CSV"))
         rule.onNodeWithText("Export data to CSV").performClick()
         waitFor { out.exists() && out.length() > 0 }
 
@@ -374,7 +375,7 @@ class AppFlowTest {
         waitFor { hasLabel("Need to eat") }
         rule.onNodeWithContentDescription("Settings").performClick()
         waitFor { hasLabel("Days used for calculations") }
-        rule.onNode(hasScrollAction()).performScrollToNode(hasText("Import data from CSV"))
+        rule.onNodeWithTag("settings-list").performScrollToNode(hasText("Import data from CSV"))
         rule.onNodeWithText("Import data from CSV").performClick()
         waitFor { hasLabel("Imported 3 days, skipped 2 invalid rows") }
 
@@ -385,5 +386,25 @@ class AppFlowTest {
         assertEquals(2500.0, byDate.getValue(today.minusDays(2)).calories!!, 1e-9)
         assertNull(byDate.getValue(today.minusDays(1)).weightKg)
         shot("16-after-import")
+    }
+
+    @Test
+    fun choosingAThemeColourAppliesItAndDefaultReturnsToWallpaperColours() {
+        waitFor { hasLabel("Need to eat") }
+        rule.onNodeWithContentDescription("Settings").performClick()
+        waitFor { hasLabel("Days used for calculations") }
+        rule.onNodeWithTag("settings-list").performScrollToNode(hasText("Default"))
+        shot("17-settings-colours")
+        rule.onNodeWithTag("accent-picker").performScrollToNode(hasText("Purple"))
+        rule.onNodeWithText("Purple").performClick()
+        waitFor { settings().accent == AccentColor.PURPLE && !settings().dynamicColor }
+        rule.onNodeWithTag("accent-picker").performScrollToNode(hasText("White"))
+        rule.onNodeWithText("White").performClick()
+        waitFor { settings().accent == AccentColor.WHITE }
+        shot("18-settings-white")
+        rule.onNodeWithTag("accent-picker").performScrollToNode(hasText("Default"))
+        rule.onNodeWithText("Default").performClick()
+        waitFor { settings().dynamicColor }
+        assertEquals(AccentColor.WHITE, settings().accent)
     }
 }
